@@ -1,5 +1,6 @@
 from random import randrange
 import datetime
+import vk
 import vk_api
 from vk_api.longpoll import VkLongPoll, VkEventType
 from pprint import pprint
@@ -11,8 +12,8 @@ params = {
 
 token = '45bca88e142e2816d4e1bf4b2796efe5c19f2c46445c2fd4d11db4a652e51a7965f1ca576906cad6ce46e'
 
-vk = vk_api.VkApi(token=token, clie)
-longpoll = VkLongPoll(vk)
+vko = vk_api.VkApi(token=token)
+longpoll = VkLongPoll(vko)
 
 
 settings = {
@@ -21,11 +22,11 @@ settings = {
 }
 
 def get_info(user_id):
-    return vk.method('users.get', {'user_id': user_id, 'fields': 'sex,bdate,city,country,relation'})
+    return vko.method('users.get', {'user_id': user_id, 'fields': 'sex,bdate,city,country,relation'})
 
 
 def get_server_time() -> list[str]:
-    return datetime.date.fromtimestamp(vk.method('utils.getServerTime')).strftime('%d.%m.%Y').split('.')
+    return datetime.date.fromtimestamp(vko.method('utils.getServerTime')).strftime('%d.%m.%Y').split('.')
 
 
 def age_meter(date1: list, date2: list) -> int:
@@ -49,10 +50,21 @@ def search(params, settings):
     if params['sex'] == 1: sex_params = 2
     elif params['sex'] == 2: sex_params = 1
     else: sex_params = 0
-    return vk.method('users.search', {'age_from': age_from, 'age_to': age_to, 'sex': sex_params})
+    final_params = {'age_from': age_from, 'age_to': age_to, 'sex': sex_params}
+    final_params['city'] = params['city']
+    pprint(final_params)
+    ids = vk.ids_from_users_search(vk.users_search(final_params))
+    users_dict = dict()
+    for id in ids:
+        users_dict[id] = vk.get_photos(id)
+    return users_dict
 
-def write_msg(user_id, message):
-    vk.method('messages.send', {'user_id': user_id, 'message': message,  'random_id': randrange(10 ** 7),})
+
+def write_msg(user_id, message, optional_params=None):
+    if optional_params is None:
+        optional_params = {}
+    vko.method('messages.send', {'user_id': user_id, 'message': message, 'random_id': randrange(10 ** 7),
+                                 **optional_params})
 
 def wait_for_response(user_id):
     for new_event in longpoll.listen():
@@ -71,7 +83,16 @@ for event in longpoll.listen():
             if request == "привет":
                 write_msg(event.user_id, f"Хай, {event.user_id}")
             elif request == 'поиск':
-                pprint(search(search_params, settings))
+                bruh = search(search_params, settings)
+                pprint(bruh)
+                for i, user in enumerate(bruh):
+                    message = f'https://vk.com/id{user}'
+                    photos = list()
+                    for attachment in bruh[user]:
+                        photos.append(attachment)
+                    photos = ','.join(photos)
+                    if photos:
+                        write_msg(event.user_id, message, optional_params={'attachment': photos})
             elif request == 'инфо':
                 info = get_info(event.user_id)[0]
                 search_params = dict()
