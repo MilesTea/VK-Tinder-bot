@@ -31,7 +31,7 @@ def users_search_old(search_params, offset=0, count=20):
 def users_search(search_params, offset=0, count=1):
     full_params = {**search_params, **base_params,
                    'sort': '0',
-                   'fields': 'is_closed',
+                   'fields': 'is_closed,relation',
                    'count': count,
                    'offset': offset
                    }
@@ -49,6 +49,8 @@ def users_search(search_params, offset=0, count=1):
     elif response['error']['error_code'] == 6:
         time.sleep(1)
         return users_search(search_params)
+    else:
+        pprint(response)
 
 
 def ids_from_users_search(response) -> list:
@@ -67,7 +69,7 @@ def ids_from_users_search(response) -> list:
 
 
 def id_from_users_search(response) -> int:
-    pprint(response)
+    # pprint(response)
     if 'error' in response:
         if response['error']['error_code'] == 5:
             print(f'токен просрочен, перейдите по ссылке: {token_url}')

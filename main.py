@@ -88,12 +88,21 @@ longpoll = VkLongPollImproved(vko)
 
 settings = {
     'age_range': 2,
-
+    'relation': [1, 6, 0],
+    'info': 'Этот бот умеет искать тебе вторую половинку\n'
+            'Для начала работы с ним нажми "Поиск"\n'
+            'Для очистки просмотренных пользователей нажми "Очистка"'
 }
 
 
 def get_server_time() -> list[str]:
     return datetime.date.fromtimestamp(vko.method('utils.getServerTime')).strftime('%d.%m.%Y').split('.')
+
+
+def get_name(user_id) -> str:
+    response = vko.method('users.get', {'user_ids': user_id})
+    name = response[0]['first_name'] + ' ' + response[0]['last_name']
+    return name
 
 
 def age_meter(date1: list, date2: list) -> int:
@@ -142,8 +151,8 @@ def read_info(event):
             search_params['sex'] = sex
     if 'city' in info:
         search_params['city'] = info['city']['id']
-    if 'relation' in info:
-        search_params['relation'] = info['relation']
+    # if 'relation' in info:
+    #     search_params['relation'] = info['relation']
     # else:
     pprint(search_params)
     return search_params
@@ -187,15 +196,24 @@ def search_user(event, search_params, settings, offset=0):
         print(i)
         while True:
             print(i)
-            id = vk.id_from_users_search(vk.users_search(final_params, count=1, offset=i))
+            result = vk.users_search(final_params, count=1, offset=i)
+            id = vk.id_from_users_search(result)
             print(id)
             i += 1
             if not Db.check(id):
                 break
         photos_list = vk.get_photos(id)
-        message = f'https://vk.com/id{id}'
+        name = result['response']['items'][0]['first_name'] + ' ' + result['response']['items'][0]['last_name']
+        message = f'{name}\nhttps://vk.com/id{id}'
         photos = ','.join(photos_list)
-        if photos:
+        try:
+            if result['response']['items'][0]['relation'] in settings['relation']:
+                free = True
+            else:
+                free = False
+        except KeyError:
+            free = True
+        if photos and free:
             write_msg(event.user_id, message, keyboard=main_keyboard, optional_params={'attachment': photos})
             Db.add(id)
             return i
@@ -247,7 +265,8 @@ if __name__ == "__main__":
                 request = event.text.lower()
 
                 if request == "start":
-                    write_msg(event.user_id, f"Хай, {event.user_id}")
+                    write_msg(event.user_id, f"Привет, {get_name(event.user_id)}\n{settings['info']}")
+                    pprint(get_name(event.user_id))
                 elif request == 'поиск':
                     if not readed:
                         search_params = read_info(event)
