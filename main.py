@@ -86,12 +86,14 @@ vko = vk_api.VkApi(token=token)
 longpoll = VkLongPollImproved(vko)
 
 
+token_url = 'https://oauth.vk.com/authorize?client_id=8039929&display=page&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131'
 settings = {
     'age_range': 2,
     'relation': [1, 6, 0],
     'info': 'Этот бот умеет искать тебе вторую половинку\n'
             'Для начала работы с ним нажми "Поиск"\n'
-            'Для очистки просмотренных пользователей нажми "Очистка"'
+            'Для очистки просмотренных пользователей нажми "Очистка"',
+    'token_expired': 'Ваш токен устарел'
 }
 
 
@@ -197,6 +199,10 @@ def search_user(event, search_params, settings, offset=0):
         while True:
             print(i)
             result = vk.users_search(final_params, count=1, offset=i)
+            if result == 'error':
+                message = f'токен просрочен, перейдите по ссылке: {token_url}'
+                write_msg(event.user_id, message, keyboard=main_keyboard)
+                return 'error'
             id = vk.id_from_users_search(result)
             print(id)
             i += 1

@@ -6,7 +6,7 @@ token_url = 'https://oauth.vk.com/authorize?client_id=8039929&display=page&redir
 application_id = '8039929'
 secret_key = '504Q0XHEYydfqbQ0kJ22'
 service_key = 'e8cac700e8cac700e8cac700a3e8b06af9ee8cae8cac70089072939b8972aff1b7c96ea'
-access_token = 'e576b3deb5a199aa609ceaee9a6dd1245c1667ca7914daf5fb6dee8709ab986db5d0ea9d9d9f44159a077'
+access_token = '942d2ebb5de1f828c4879c1aa7f473a30672a5de6d58e3030497ac606d0a65b3ea98ccd88c6ac86f9f17e'
 base_params = {
     'access_token': access_token,
     'v': '5.131'
@@ -49,8 +49,12 @@ def users_search(search_params, offset=0, count=1):
     elif response['error']['error_code'] == 6:
         time.sleep(1)
         return users_search(search_params)
+    elif response['error']['error_code'] == 5:
+        print(f'токен просрочен, перейдите по ссылке: {token_url}')
+        return 'error'
     else:
         pprint(response)
+        raise Exception(response['error']['error_msg'])
 
 
 def ids_from_users_search(response) -> list:
