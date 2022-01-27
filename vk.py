@@ -194,7 +194,7 @@ class Bot:
         :return: список стран
         """
         url = base_url + 'database.getCountries'
-        response = requests.get(url, params={'need_all': 1, **self.base_params}).json()
+        response = requests.get(url, params={'need_all': 1, 'count': 1000, **self.base_params}).json()
         return response['response']['items']
 
     def get_params(self, user_id) -> dict:
@@ -211,35 +211,13 @@ class Bot:
             if len(bdate) == 3:
                 age = utils.age_meter(now, bdate)
                 user_params['age'] = age
-        '''
-            else:
-                write_msg(event.user_id, 'Введите ваш возраст')
-                search_params['age'] = int(wait_for_response(event.user_id))
-        else:
-            write_msg(event.user_id, 'Введите ваш возраст')
-            search_params['age'] = int(wait_for_response(event.user_id))
-        '''
         if 'sex' in info:
             if info['sex'] in [1, 2]:
                 user_params['sex'] = info['sex']
-        '''
-        else:
-            write_msg(event.user_id, 'Введите ваш пол\nМ\\Ж')
-            sex = wait_for_response(event.user_id)
-            if sex == 'м':
-                sex = 2
-            elif sex == 'ж':
-                sex = 1
-            if sex in [1, 2]:
-                search_params['sex'] = sex
-        '''
         if 'city' in info:
             user_params['city'] = info['city']['id']
         if 'country' in info:
             user_params['country'] = info['country']['id']
-        # if 'relation' in info:
-        #     search_params['relation'] = info['relation']
-        # else:
         return user_params
 
     def get_name(self, user_id) -> str:

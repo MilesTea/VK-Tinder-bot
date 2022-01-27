@@ -1,58 +1,93 @@
 import random
 import vk
 import sql
-from pprint import pprint
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 
 
-def search(search_offset, search_count):
+def search_by_params(search_offset: int, search_count: int, search_params, bot, event, settings) -> list:
+    """
+    поиск пользователей по заданным параметрам
+    :param search_offset: offset
+    :param search_count:  count
+    :param search_params: параметры поиска
+    :param bot: бот из vk.py
+    :param event: event
+    :param settings: settings
+    :return: перетасованный список найденых пользователей
+    """
     print('начинаю поиск')
-    users = Bot.users_search(search_params=search_params, offset=search_offset, count=search_count)
+    users = bot.users_search(search_params=search_params, offset=search_offset, count=search_count)
     if users:
         filtered_users = vk.filter_users(users)
         random.shuffle(filtered_users)
         print('поиск удачный')
         return filtered_users
     else:
-        Bot.messages_send(event.user_id, settings['token_expired'])
-        new_user_token = wait_for_response(event.user_id)
-        Bot.update_user_token(new_user_token)
+        bot.messages_send(event.user_id, settings['token_expired'])
+        new_user_token = wait_for_response(event.user_id, bot)
+        bot.update_user_token(new_user_token)
         print('поиск не удачный, начинаю новый поиск')
-        return search(search_offset, search_count)
+        return search_by_params(search_offset, search_count, search_params, bot, event, settings)
 
 
-def wait_for_response(user_id):
-    for new_event in Bot.longpoll.listen():
+def wait_for_response(user_id, bot) -> str:
+    """
+    ожидание ответа пользователя; добавление событий от других пользователей в очередь
+    :param user_id: id пользователя
+    :param bot: бот из vk.py
+    :return: ответ пользователя
+    """
+    for new_event in bot.longpoll.listen():
         if new_event.type == vk.VkEventType.MESSAGE_NEW:
             if new_event.to_me:
                 if new_event.user_id == user_id:
                     return new_event.text.lower()
                 else:
-                    Bot.longpoll.add_to_queue(new_event)
+                    bot.longpoll.add_to_queue(new_event)
 
 
-def get_user(sorted_users):
+def get_user(sorted_users, bot, event, db, keyboard) -> True or False:
+    """
+    :param sorted_users: список пользователей
+    :param bot: бот из vk.py
+    :param event: event
+    :param db: доступ к базе данных
+    :param keyboard: клавиатура для бота
+    :return: если пользователь найден - True, иначе - False
+    """
     while sorted_users:
         user = sorted_users[-1]
-        photos = vk.get_top_photos(Bot.photos_get(user['id']))
+        photos = vk.get_top_photos(bot.photos_get(user['id']))
         sorted_users.pop()
-        if photos and not Db.check(user['id']):
+
+        if db.is_on:
+            in_db = db.check(user['id'])
+        else:
+            in_db = False
+            print('Внимание, база данных недоступна')
+
+        if photos and not in_db:
             user_name = user['first_name'] + ' ' + user['last_name']
             url = f'https://vk.com/id{user["id"]}'
             message = f'{user_name}\n{url}'
             photos = ','.join(photos)
             print(user_name)
-            Bot.messages_send(user_id=event.user_id,
+            bot.messages_send(user_id=event.user_id,
                               message=message,
-                              optional_params={'keyboard': start_keyboard.get_keyboard(),
+                              optional_params={'keyboard': keyboard.get_keyboard(),
                                                'attachment': photos})
-            Db.add(user['id'])
+            db.add(user['id'])
             return True
     print('подходящих в списке нет')
     return False
 
 
-def get_params(params):
+def get_params(params, settings):
+    """
+    :param params: параметры пользователя
+    :param settings: settings
+    :return: параметры поиска
+    """
     search_params = dict()
     if 'sex' in params:
         if params['sex'] == 1:
@@ -72,77 +107,98 @@ def get_params(params):
     return search_params
 
 
-def check_params(event, params) -> None:
+def check_params(event, params, bot) -> None:
+    """
+    проверка параметров пользователя на заполнение; их дозаполнение в случае отсутсвия
+    :param event: event
+    :param params: параметры пользователя
+    :param bot: бот из vk.py
+    :return: None
+    """
     if 'sex' not in params:
         temp_keyboard = VkKeyboard(inline=True, one_time=False)
         temp_keyboard.add_button('Мужской', color=VkKeyboardColor.SECONDARY)
         temp_keyboard.add_button('Женский', color=VkKeyboardColor.PRIMARY)
-        Bot.messages_send(event.user_id, 'Ваш пол?\nМужской/Женский',
-                          optional_params={'keyboard': start_keyboard.get_keyboard()})
-        sex = wait_for_response(event.user_id)
+        bot.messages_send(event.user_id, 'Ваш пол?\nМужской/Женский',
+                          optional_params={'keyboard': temp_keyboard.get_keyboard()})
+        sex = wait_for_response(event.user_id, bot)
         if sex == 'мужской':
             params['sex'] = 2
         elif sex == 'женский':
             params['sex'] = 1
         else:
-            Bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры любого пола')
+            bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры любого пола')
 
     if 'age' not in params:
-        Bot.messages_send(event.user_id, 'Сколько вам лет?')
-        age = wait_for_response(event.user_id)
+        bot.messages_send(event.user_id, 'Сколько вам лет?')
+        age = wait_for_response(event.user_id, bot)
         if age.isdigit():
             params['age'] = int(age)
         else:
-            Bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры любого возраста')
+            bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры любого возраста')
 
     if 'country' not in params:
-        Bot.messages_send(event.user_id, 'Название вашей страны?')
-        country = wait_for_response(event.user_id)
-        for item in Bot.database_get_countries():
+        bot.messages_send(event.user_id, 'Название вашей страны?')
+        country = wait_for_response(event.user_id, bot)
+        for item in bot.database_get_countries():
             if item['title'].lower() == country:
                 params['country'] = item['id']
                 break
 
     if 'country' not in params:
-        Bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры из любой точки мира')
-    else:
-        Bot.messages_send(event.user_id, 'Название вашего города?')
-        city = wait_for_response(event.user_id)
-        city_id = Bot.database_get_cities(city, params['country'])
+        bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры из любой точки мира')
+
+    if 'country' in params and 'city' not in params:
+        bot.messages_send(event.user_id, 'Название вашего города?')
+        city = wait_for_response(event.user_id, bot)
+        city_id = bot.database_get_cities(city, params['country'])
         if not city_id:
-            Bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры со всей страны')
+            bot.messages_send(event.user_id, 'неверное значение, будут отображаться партнёры со всей страны')
 
 
-user_token = ''
-group_token = ''
-app_id = ''
-
-main_keyboard = VkKeyboard(inline=True, one_time=False)
-main_keyboard.add_button('Очистка', color=VkKeyboardColor.SECONDARY)
-main_keyboard.add_button('Далее', color=VkKeyboardColor.PRIMARY)
-
-
-start_keyboard = VkKeyboard(inline=True, one_time=False)
-start_keyboard.add_button('Очистка', color=VkKeyboardColor.SECONDARY)
-start_keyboard.add_button('Поиск', color=VkKeyboardColor.PRIMARY)
+def start(bot, event, settings, name, db, keyboard):
+    bot.messages_send(event.user_id, f"Привет, {name}\n{settings['info']}",
+                      optional_params={'keyboard': keyboard.get_keyboard()})
+    print(f'Здраствуйте, {name}')
+    if not db.is_on():
+        bot.messages_send(event.user_id, 'Внимание, база данных недоступна, результаты поиска могут повторяться')
 
 
-if __name__ == "__main__":
+def search(search_params: dict, shuffled_users: list, bot, event, settings, db, keyboard):
+    if not search_params:
+        params = bot.get_params(event.user_id)
+        check_params(event, params, bot)
+        search_params = get_params(params, settings)
+    if not shuffled_users:
+        shuffled_users = search_by_params(settings['offset'], settings['count'], search_params, bot, event, settings)
+
+    warn = False
+    while not get_user(shuffled_users, bot, event, db, keyboard):
+        if not warn:
+            bot.messages_send(event.user_id, 'Выполняется поиск, пожалуйста, подождите')
+            warn = True
+        settings['offset'] += settings['count']
+        shuffled_users = search_by_params(settings['offset'], settings['count'], search_params, bot, event, settings)
+    return search_params, settings
+
+
+def clean(bot, db, event, keyboard):
+    if db.is_on():
+        db.delete_all()
+        bot.messages_send(event.user_id, 'Очистка выполнена',
+                          optional_params={'keyboard': keyboard.get_keyboard()})
+
+
+def main():
+    user_token = ''
+    group_token = ''
     Db = sql.UsersDb()
-    readed = False
-    shuffled_users = None
-    searched = False
-    count = 100
-    offset = 0
-    if not group_token or user_token or app_id:
-        print('Для работы бота требуется ключ доступа группы и id вашего приложения ВК')
-        app_id = input('Введите id вашего приложения\n')
+    shuffled_users = list()
+    search_params = dict()
+    if not group_token or user_token:
         group_token = input('Введите ключ доступа вашей группы\n')
-        token_link = f'https://oauth.vk.com/authorize?client_id={app_id}&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131'
-        print(f'Получите токен по ссылке\n{token_link}')
-        user_token = input('Введите полученный токен\n')
+        user_token = input('Введите ключ доступа пользователя\n')
         print('Бот готов к работе')
-    token_link = f'https://oauth.vk.com/authorize?client_id={app_id}&redirect_uri=https://oauth.vk.com/blank.html&response_type=token&v=5.131'
 
     settings = {
         'age_range': 2,
@@ -150,8 +206,15 @@ if __name__ == "__main__":
         'info': 'Этот бот умеет искать тебе вторую половинку\n'
                 'Для начала работы с ним нажми "Поиск"\n'
                 'Для очистки просмотренных пользователей нажми "Очистка"',
-        'token_expired': f'Ваш токен устарел, пожалуйста, введите новый токен\nСсылка для токена:\n{token_link}'
+        'token_expired': f'Ваш токен устарел, пожалуйста, введите новый токен',
+        'offset': 0,
+        'count': 100
     }
+
+    keyboard = VkKeyboard(inline=True, one_time=False)
+    if Db.is_on():
+        keyboard.add_button('Очистка', color=VkKeyboardColor.SECONDARY)
+    keyboard.add_button('Поиск', color=VkKeyboardColor.PRIMARY)
 
     Bot = vk.Bot(user_token, group_token)
     for event in Bot.longpoll.improved_listen():
@@ -160,33 +223,16 @@ if __name__ == "__main__":
                 name = Bot.get_name(event.user_id)
                 request = event.text.lower()
                 if request == "start":
-                    Bot.messages_send(event.user_id, f"Привет, {name}\n{settings['info']}",
-                                      optional_params={'keyboard': start_keyboard.get_keyboard()})
-                    print(f'Здраствуйте, {name}')
+                    start(Bot, event, settings, name, Db, keyboard)
                 elif request == 'поиск':
-                    warn = False
-                    # читаем параметры поиска
-                    if not readed:
-                        search_params = get_params(Bot.get_params(event.user_id))
-                        readed = True
-
-                    # проверка на поиск
-                    if not searched:
-                        shuffled_users = search(offset, count)
-                        searched = True
-                    if shuffled_users:
-                        while not get_user(shuffled_users):
-                            if not warn:
-                                Bot.messages_send(event.user_id, 'Выполняется поиск, пожалуйста, подождите')
-                                warn = True
-                            offset += count
-                            shuffled_users = search(offset, count)
-
+                    search_params, offset = search(search_params, shuffled_users, Bot, event, settings, Db, keyboard)
                 elif request == "очистка":
-                    Db.delete_all()
-                    Bot.messages_send(event.user_id, 'Очистка выполнена',
-                                      optional_params={'keyboard': start_keyboard.get_keyboard()})
+                    clean(Bot, Db, event, keyboard)
                 elif request == "пока":
                     Bot.messages_send(event.user_id, 'Пока')
                 else:
                     Bot.messages_send(event.user_id, 'Команда не распознанна')
+
+
+if __name__ == "__main__":
+    main()

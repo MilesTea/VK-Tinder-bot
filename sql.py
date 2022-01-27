@@ -1,7 +1,9 @@
 import os
 import sqlalchemy as sq
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.orm import sessionmaker
+
+
 class UsersDb:
 	def __init__(self):
 		self.working_dir = os.getcwd()
@@ -47,64 +49,22 @@ class UsersDb:
 		except:
 			print('cant_check')
 
-
-
-
-'''	
-working_dir = os.getcwd()
-engine = sq.create_engine(f'sqlite:///{working_dir}\\database.db')
-Session = sessionmaker(bind=engine)
-session = Session()
-'''
+	def is_on(self):
+		try:
+			self.check()
+			return True
+		except:
+			return False
 
 
 Base = declarative_base()
+
+
 class Users(Base):
 	__tablename__ = 'users'
 	user_id = sq.Column(sq.Integer, primary_key=True)
-
-# Base.metadata.create_all(engine)
-
-
-
-
-
-
-
-
-
-'''
-result = Session().query(Users).first()
-print(result)
-session.commit()
-
-user1 = Users(user_id=1234)
-session.add(user1)
-session.commit()
-
-result = Session().query(Users).first()
-print(result.user_id)
-session.commit()
-
-# Session.close_all()
-# result = Session().query(Users).delete()
-session.query(Users).filter(Users.user_id == '1234').delete()
-session.commit()
-
-result = Session().query(Users).first()
-print(result)
-session.commit()
-'''
-
-
-'''
-CREATE TABLE users (
-    user_id INTEGER NOT NULL PRIMARY KEY
-);
-'''
 
 
 if __name__ == '__main__':
 	db = UsersDb()
 	db.delete_all()
-	print(db.check())
