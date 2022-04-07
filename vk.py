@@ -10,7 +10,7 @@ from pprint import pprint
 
 class VkLongPollImproved(VkLongPoll):
     """
-    Попытка добавления очереди событий
+    Попытка добавления очереди событий для корректной обработки нескольких запросов
     """
     def __init__(self, vk, wait=25, mode=vk_api.longpoll.DEFAULT_MODE,
                  preload_messages=False, group_id=None):

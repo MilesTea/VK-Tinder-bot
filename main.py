@@ -3,7 +3,6 @@ import vk
 import sql
 from vk_api.keyboard import VkKeyboard, VkKeyboardColor
 
-
 def search_by_params(search_offset: int, search_count: int, search_params, bot, event, settings) -> list:
     """
     поиск пользователей по заданным параметрам
@@ -231,7 +230,7 @@ def main():
                 elif request == "пока":
                     Bot.messages_send(event.user_id, 'Пока')
                 else:
-                    Bot.messages_send(event.user_id, 'Команда не распознанна')
+                    Bot.messages_send(event.user_id, 'Команда не распознанна, для начала работы напишите start')
 
 
 if __name__ == "__main__":
